@@ -1,0 +1,19 @@
+{
+  "name": "demo",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^5.1.0",
+    "fs": "*",
+    "mongodb": "^6.15.0",
+    "mongoose": "^8.13.1",
+    "socket.io": "^4.8.1"
+  }
+}
