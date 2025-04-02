@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSON Uploader</title>
+    <script src="https://cdn.socket.io/4.4.1/socket.io.min.js"></script>
+</head>
+<body>
+    <h1>Upload JSON</h1>
+    <textarea id="jsonInput" rows="10" cols="50"></textarea>
+    <br>
+    <button onclick="uploadJSON()">Upload JSON</button>
+    <h2>Database Updates</h2>
+    <pre id="output"></pre>
+
+    <script>
+        const socket = io("http://localhost:3000");
+
+        function uploadJSON() {
+            const jsonData = document.getElementById("jsonInput").value;
+            try {
+                const parsedData = JSON.parse(jsonData);
+                fetch("http://localhost:3000/upload", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(parsedData)
+                })
+                .then(res => res.json())
+                .then(data => alert(data.message))
+                .catch(err => console.error("Error:", err));
+            } catch (err) {
+                alert("Invalid JSON format!");
+            }
+        }
+
+        socket.on("dbUpdate", (update) => {
+            document.getElementById("output").textContent += JSON.stringify(update, null, 2) + "\n";
+        });
+    </script>
+</body>
+</html>

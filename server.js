@@ -1,62 +1,52 @@
 const express = require("express");
 const http = require("http");
-const { Server } = require("socket.io");
-const mongoose = require("mongoose");
-const { MongoClient, GridFSBucket } = require("mongodb");
-const fs = require("fs");
+const socketIo = require("socket.io");
+const cors = require("cors");
+const { MongoClient } = require('mongodb');
+const mongoURI = "mongodb://localhost:27017"; 
 
 const app = express();
+app.use(cors()); // Allow cross-origin requests
+
 const server = http.createServer(app);
-const io = new Server(server);
+const io = socketIo(server, { cors: { origin: "*" } });
 
-// Connect to MongoDB
-const mongoURI = "mongodb://localhost:27017/jsonDB";
-mongoose.connect(mongoURI, { useNewUrlParser: true, useUnifiedTopology: true });
 
-const client = new MongoClient(mongoURI);
-client.connect().then(() => {
-  console.log("MongoDB connected for GridFS");
-});
+//connecting to  database 
+MongoClient.connect(mongoURI, { useNewUrlParser: true, useUnifiedTopology: true })
+    .then(client => {
+        db = client.db("realtimeDB");
+        jsonCollection = db.collection("jsonFiles");
 
-const db = client.db("jsonDB");
-const bucket = new GridFSBucket(db, { bucketName: "jsonFiles" });
+        console.log("Connected to MongoDB");
 
-// 🔹 Upload JSON File to MongoDB (GridFS)
-app.post("/upload", (req, res) => {
-  const uploadStream = bucket.openUploadStream("data.json");
-  fs.createReadStream("data.json").pipe(uploadStream);
+        // look for changes in MongoDB and notify clients
+        const changeStream = jsonCollection.watch();
+        changeStream.on("change", (change) => {
+            console.log("Database changed:", change);
+            io.emit("dbUpdate", change);
+        });
+    })
+    .catch(err => console.error("MongoDB Connection Error:", err));
 
-  uploadStream.on("finish", () => {
-    console.log("JSON file stored in MongoDB!");
-    io.emit("file_uploaded", { message: "New JSON file added!" });
-    res.json({ success: true, message: "JSON file uploaded!" });
-  });
-});
 
-// 🔹 Notify Clients When New JSON Files Are Stored
-db.collection("jsonFiles.files").watch().on("change", (change) => {
-  if (change.operationType === "insert") {
-    io.emit("file_uploaded", { message: "New JSON file available!" });
+
+// Socket.io connection
+app.post("/upload", async (req, res) => {
+  try {
+      const jsonData = req.body;
+      const result = await jsonCollection.insertOne({ data: jsonData, timestamp: new Date() });
+
+      io.emit("newJson", jsonData); // Notify all clients about new data
+      res.json({ success: true, message: "JSON stored successfully!", id: result.insertedId });
+  } catch (error) {
+      res.status(500).json({ success: false, message: "Error storing JSON", error });
   }
 });
 
-// 🔹 Retrieve JSON File from GridFS
-app.get("/download", (req, res) => {
-  const downloadStream = bucket.openDownloadStreamByName("data.json");
-  res.setHeader("Content-Type", "application/json");
-  downloadStream.pipe(res);
+// Serve frontend
+app.get("/", (req, res) => {
+  res.sendFile(__dirname + "/client.html");
 });
 
-// 🔹 WebSocket Connection
-io.on("connection", (socket) => {
-  console.log("User connected:", socket.id);
-
-  socket.on("disconnect", () => {
-    console.log("User disconnected:", socket.id);
-  });
-});
-
-// Start the Server
-server.listen(3000, () => {
-  console.log("Server running on port 3000");
-});
+server.listen(3000, () => console.log("Server running on http://localhost:3000"));
